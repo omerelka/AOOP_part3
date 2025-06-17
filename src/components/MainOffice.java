@@ -160,10 +160,11 @@ public class MainOffice implements Runnable{
 			e.printStackTrace();
 		}
 		System.out.println(clockString());
-		if (clock++%5==0 && maxPackages>0) {
-			addPackage();
-			maxPackages--;
-		}
+		// if (clock++%5==0 && maxPackages>0) {
+		// 	addPackage();
+		// 	maxPackages--;
+		// }
+		clock++;
 		panel.repaint();
 	}
 	
@@ -188,7 +189,9 @@ public class MainOffice implements Runnable{
 		for (int i=0; i<branches; i++) {
 			Branch branch=new Branch();
 			for (int j=0; j<trucks; j++) {
-				branch.addTruck(new Van());
+				Van van = new Van();
+				van.setParentBranch(branch);
+				branch.addTruck(van);
 			}
 			hub.add_branch(branch);		
 		}

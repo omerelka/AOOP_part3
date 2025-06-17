@@ -5,22 +5,29 @@ import java.awt.Graphics;
 
 public class Van extends Truck{
 	
+	private Branch parentBranch;
+	
 	public Van() {
 		super();
 		System.out.println("Creating " + this);
 	}
 	
-	
 	public Van(String licensePlate,String truckModel) {
 		super(licensePlate,truckModel);
 	}
 	
+	public void setParentBranch(Branch branch) {
+		this.parentBranch = branch;
+	}
+	
+	public Branch getParentBranch() {
+		return parentBranch;
+	}
 
 	@Override
 	public String toString() {
 		return "Van ["+ super.toString() + "]";
 	}
-	
 	
 	@Override
 	public synchronized void deliverPackage(Package p) {
@@ -34,6 +41,18 @@ public class Van extends Truck{
 		System.out.println("Van "+ this.getTruckID() + " is delivering package " + p.getPackageID() + ", time left: "+ this.getTimeLeft()  );
 	}
 	
+	private Package findPackageToProcess() {
+		if (parentBranch == null) return null;
+		
+		synchronized(parentBranch) {
+			for (Package p : parentBranch.getPackages()) {
+				if (p.getStatus() == Status.CREATION || p.getStatus() == Status.DELIVERY) {
+					return p;
+				}
+			}
+		}
+		return null;
+	}
 	
 	@Override
 	public void run() {
@@ -41,7 +60,6 @@ public class Van extends Truck{
 			try {
 				Thread.sleep(300);
 			} catch (InterruptedException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
 		    synchronized(this) {
@@ -49,14 +67,14 @@ public class Van extends Truck{
 					try {
 						wait();
 					} catch (InterruptedException e) {
-						// TODO Auto-generated catch block
 						e.printStackTrace();
 					}
 		    }
-			Branch branch=null;
+		    
 			if (!this.isAvailable()) {
 				this.setTimeLeft(this.getTimeLeft()-1);
 				if (this.getTimeLeft()==0){
+					Branch branch=null;
 					for (Package p : this.getPackages()) {
 						if (p.getStatus()==Status.COLLECTION) {
 							branch=MainOffice.getHub().getBranches().get(p.getSenderAddress().zip);
@@ -79,30 +97,45 @@ public class Van extends Truck{
 							}
 						}
 						p.addTracking(new Tracking(MainOffice.getClock(), branch, p.getStatus()));
-	
 					}
 					this.getPackages().removeAll(getPackages());
 					this.setAvailable(true);
 				}
 			}
-			else 				
-				synchronized(this) {
+			else {
+				if (parentBranch != null) {
 					try {
-						wait();
+						parentBranch.getWorkSemaphore().acquire();
+						
+						Package packageToProcess = findPackageToProcess();
+						if (packageToProcess != null) {
+							if (packageToProcess.getStatus() == Status.CREATION) {
+								collectPackage(packageToProcess);
+							} else if (packageToProcess.getStatus() == Status.DELIVERY) {
+								deliverPackage(packageToProcess);
+							}
+						}
+						
 					} catch (InterruptedException e) {
-						// TODO Auto-generated catch block
 						e.printStackTrace();
 					}
+				} else {
+					// Fallback: traditional wait if no parent branch set
+					synchronized(this) {
+						try {
+							wait();
+						} catch (InterruptedException e) {
+							e.printStackTrace();
+						}
+					}
 				}
+			}
 		}
-		
 	}
 	
 	@Override
 	public void work() {
-
 	}
-
 
 	@Override
 	public void paintComponent(Graphics g) {
@@ -138,10 +171,5 @@ public class Van extends Truck{
 			g.fillOval(dX+x1, dY+y1-12, 10, 10);
 			g.fillOval(dX+x1-12, dY+y1, 10, 10);
 		}
-			
-		
 	}
-
-
-
 }

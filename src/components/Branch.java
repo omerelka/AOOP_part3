@@ -5,6 +5,7 @@ import java.awt.Graphics;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.Semaphore;
 
 public class Branch implements Node, Runnable {
 	private static int counter=0;
@@ -16,6 +17,8 @@ public class Branch implements Node, Runnable {
 	private Point hubPoint;
 	private Point branchPoint;
 	protected boolean threadSuspend = false;
+
+	private Semaphore workAvailable = new Semaphore(0);
 	
 	public Branch() {
 		this("Branch "+counter);
@@ -51,6 +54,10 @@ public class Branch implements Node, Runnable {
 	
 	public synchronized void addPackage(Package pack) {
 		listPackages.add(pack);
+		if (pack.getStatus() == Status.CREATION || pack.getStatus() == Status.DELIVERY) {
+        workAvailable.release();
+    }
+		notifyAll();
 	}
 	
 	
@@ -73,7 +80,7 @@ public class Branch implements Node, Runnable {
 	
 	public synchronized void addPackages(Package[] plist) {
 		for (Package pack: plist)
-			listPackages.add(pack);
+			addPackage(pack);
 	}
 	
 	
@@ -172,16 +179,11 @@ public class Branch implements Node, Runnable {
 						e.printStackTrace();
 					}
 		    }
-			synchronized(this) {
-				for (Package p: listPackages) {
-						if (p.getStatus()==Status.CREATION) {
-							collectPackage(p);
-						}
-						if (p.getStatus()==Status.DELIVERY) {
-							deliverPackage(p);
-						}
-				}
-			}
+			try {
+		    	Thread.sleep(300);
+		    } catch (InterruptedException e) {
+		    	e.printStackTrace();
+		    }
 		}
 	}
 	
@@ -194,4 +196,6 @@ public class Branch implements Node, Runnable {
 	   	threadSuspend = false;
 	   	notify();
 	}
+
+	public Semaphore getWorkSemaphore(){return workAvailable;}
 }
