@@ -182,6 +182,18 @@ public class NonStandardTruck extends Truck{
 	}
 
 
+	@Override
+	public Truck clone() throws CloneNotSupportedException {
+		NonStandardTruck clonedTruck = new NonStandardTruck();
+		this.copyPropertiesTo(clonedTruck);
+		clonedTruck.width = this.width;
+		clonedTruck.height = this.height;
+		clonedTruck.length = this.length;
+
+		return clonedTruck;
+	}
+
+
 	
 }
 

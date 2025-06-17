@@ -3,8 +3,9 @@ package components;
 import java.awt.Color;
 import java.awt.Graphics;
 
-public class Van extends Truck{
+public class Van extends Truck {
 	
+	// Reference to parent branch for semaphore access
 	private Branch parentBranch;
 	
 	public Van() {
@@ -16,10 +17,25 @@ public class Van extends Truck{
 		super(licensePlate,truckModel);
 	}
 	
+	// Clone implementation for Van
+	@Override
+	public Van clone() throws CloneNotSupportedException {
+		Van clonedVan = new Van();
+		this.copyPropertiesTo(clonedVan);
+		
+		// Don't copy parent branch - will be set by Branch.clone()
+		clonedVan.parentBranch = null;
+		
+		System.out.println("Cloned Van: " + this.getTruckID() + " -> " + clonedVan.getTruckID());
+		return clonedVan;
+	}
+	
+	// Method to set parent branch
 	public void setParentBranch(Branch branch) {
 		this.parentBranch = branch;
 	}
 	
+	// Get parent branch
 	public Branch getParentBranch() {
 		return parentBranch;
 	}
@@ -41,6 +57,7 @@ public class Van extends Truck{
 		System.out.println("Van "+ this.getTruckID() + " is delivering package " + p.getPackageID() + ", time left: "+ this.getTimeLeft()  );
 	}
 	
+	// Helper method to find package that needs processing
 	private Package findPackageToProcess() {
 		if (parentBranch == null) return null;
 		
@@ -54,6 +71,7 @@ public class Van extends Truck{
 		return null;
 	}
 	
+	// FIXED: Use semaphore-based consumer pattern and fix Van return logic
 	@Override
 	public void run() {
 		while(true) {
@@ -72,29 +90,36 @@ public class Van extends Truck{
 		    }
 		    
 			if (!this.isAvailable()) {
+				// Handle current work
 				this.setTimeLeft(this.getTimeLeft()-1);
 				if (this.getTimeLeft()==0){
 					Branch branch=null;
 					for (Package p : this.getPackages()) {
 						if (p.getStatus()==Status.COLLECTION) {
-							branch=MainOffice.getHub().getBranches().get(p.getSenderAddress().zip);
-							synchronized(branch) {
-								p.setStatus(Status.BRANCH_STORAGE);
-								System.out.println("Van " + this.getTruckID() + " has collected package " +p.getPackageID()+" and arrived back to branch " + branch.getBranchId());
-								branch.addPackage(p);
-							}
-						}
-						else {
-							p.setStatus(Status.DELIVERED);
-							branch=MainOffice.getHub().getBranches().get(p.getDestinationAddress().zip);
-							synchronized(branch) {
-								branch.listPackages.remove(p);
-								branch=null;
-								System.out.println("Van " + this.getTruckID() + " has delivered package "+p.getPackageID() + " to the destination");
-								if (p instanceof SmallPackage && ((SmallPackage)p).isAcknowledge()) {
-									System.out.println("Acknowledge sent for package "+p.getPackageID());
+							// FIXED: Return to parent branch, not destination branch
+							branch = parentBranch;
+							if (branch != null) {
+								synchronized(branch) {
+									p.setStatus(Status.BRANCH_STORAGE);
+									System.out.println("Van " + this.getTruckID() + " has collected package " +p.getPackageID()+" and arrived back to branch " + branch.getBranchId());
+									branch.addPackage(p);
 								}
 							}
+						}
+						else if (p.getStatus()==Status.DISTRIBUTION) {
+							p.setStatus(Status.DELIVERED);
+							// FIXED: For delivery, remove from destination branch properly
+							Branch destBranch = MainOffice.getHub().getBranches().get(p.getDestinationAddress().zip);
+							if (destBranch != null) {
+								synchronized(destBranch) {
+									destBranch.listPackages.remove(p);
+									System.out.println("Van " + this.getTruckID() + " has delivered package "+p.getPackageID() + " to the destination");
+									if (p instanceof SmallPackage && ((SmallPackage)p).isAcknowledge()) {
+										System.out.println("Acknowledge sent for package "+p.getPackageID());
+									}
+								}
+							}
+							branch = null; // No branch for delivery tracking
 						}
 						p.addTracking(new Tracking(MainOffice.getClock(), branch, p.getStatus()));
 					}
@@ -103,10 +128,13 @@ public class Van extends Truck{
 				}
 			}
 			else {
+				// Consumer logic using semaphore + wait/notify
 				if (parentBranch != null) {
 					try {
+						// Primary mechanism: wait for semaphore permit
 						parentBranch.getWorkSemaphore().acquire();
 						
+						// Find and process package
 						Package packageToProcess = findPackageToProcess();
 						if (packageToProcess != null) {
 							if (packageToProcess.getStatus() == Status.CREATION) {
@@ -135,6 +163,7 @@ public class Van extends Truck{
 	
 	@Override
 	public void work() {
+		// Keep empty for compatibility
 	}
 
 	@Override

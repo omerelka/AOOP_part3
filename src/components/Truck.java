@@ -5,7 +5,7 @@ import java.util.ArrayList;
 import java.util.Random;
 
 
-public  abstract class Truck implements Node,Runnable {
+public  abstract class Truck implements Node,Runnable,Cloneable {
 	private static int countID=2000;
 	final private int truckID;
 	private String licensePlate;
@@ -99,5 +99,13 @@ public  abstract class Truck implements Node,Runnable {
 	}
 	
 	public abstract void paintComponent(Graphics g);
+
+    @Override
+	public abstract Truck clone() throws CloneNotSupportedException;
+
+	protected void copyPropertiesTo(Truck clonedTruck){
+		clonedTruck.licensePlate =this.licensePlate+"-CLONE";
+		clonedTruck.truckModel = this.truckModel;
+	}
 	
 }

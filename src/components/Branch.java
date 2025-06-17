@@ -7,17 +7,18 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Semaphore;
 
-public class Branch implements Node, Runnable {
+public class Branch implements Node, Runnable, Cloneable {
 	private static int counter=0;
 	private int branchId;
 	private String branchName;
 	protected ArrayList <Package> unsafeListPackages = new ArrayList<Package>();
-	protected List<Package> listPackages = unsafeListPackages; //Collections.synchronizedList(unsafeListPackages);
+	protected List<Package> listPackages = unsafeListPackages;
 	protected ArrayList <Truck> listTrucks = new ArrayList<Truck>();
 	private Point hubPoint;
 	private Point branchPoint;
 	protected boolean threadSuspend = false;
-
+	
+	// Semaphore for producer-consumer pattern
 	private Semaphore workAvailable = new Semaphore(0);
 	
 	public Branch() {
@@ -37,8 +38,45 @@ public class Branch implements Node, Runnable {
 		addTrucks(tlist);
 	}
 	
+	// Clone method implementation
+	@Override
+	public Branch clone() throws CloneNotSupportedException {
+		// Create new branch with incremented counter
+		Branch clonedBranch = new Branch("Branch " + counter);
+		
+		// Clone trucks (deep copy with new IDs but same properties)
+		for (Truck originalTruck : this.listTrucks) {
+			Truck clonedTruck = cloneTruck(originalTruck);
+			if (clonedTruck instanceof Van) {
+				((Van) clonedTruck).setParentBranch(clonedBranch);
+			}
+			clonedBranch.addTruck(clonedTruck);
+		}
+		
+		// Don't clone packages - new branch starts empty
+		// Don't clone semaphore state - new branch starts fresh
+		
+		System.out.println("Cloned branch: " + this.branchName + " -> " + clonedBranch.branchName);
+		return clonedBranch;
+	}
+	
+	// Helper method to clone trucks using their clone() methods
+	private Truck cloneTruck(Truck originalTruck) throws CloneNotSupportedException {
+		return originalTruck.clone(); // Use the truck's own clone method
+	}
+	
+	// Static method to get current counter (for external use)
+	public static int getCurrentCounter() {
+		return counter;
+	}
+	
 	public synchronized List <Package> getPackages(){
 		return this.listPackages;
+	}
+	
+	// Getter for semaphore
+	public Semaphore getWorkSemaphore() {
+		return workAvailable;
 	}
 	
 	public void printBranch() {
@@ -51,15 +89,22 @@ public class Branch implements Node, Runnable {
 			System.out.println(trk);
 	}
 	
-	
+	// FIXED: Add semaphore release and StandardTruck signaling
 	public synchronized void addPackage(Package pack) {
 		listPackages.add(pack);
+		
+		// Release semaphore permit if package needs processing by Van
 		if (pack.getStatus() == Status.CREATION || pack.getStatus() == Status.DELIVERY) {
-        workAvailable.release();
-    }
-		notifyAll();
+			workAvailable.release(); // Primary mechanism - semaphore
+		}
+		
+		// Signal StandardTruck work if package needs branch transport
+		if (pack.getStatus() == Status.BRANCH_STORAGE) {
+			MainOffice.getHub().signalStandardTruckWork();
+		}
+		
+		notifyAll(); // Additional coordination - wait/notify
 	}
-	
 	
 	public ArrayList <Truck> getTrucks(){
 		return this.listTrucks;
@@ -68,7 +113,6 @@ public class Branch implements Node, Runnable {
 	public void addTruck(Truck trk) {
 		listTrucks.add(trk);
 	}
-	
 	
 	public Point getHubPoint() {
 		return hubPoint;
@@ -80,33 +124,28 @@ public class Branch implements Node, Runnable {
 	
 	public synchronized void addPackages(Package[] plist) {
 		for (Package pack: plist)
-			addPackage(pack);
+			addPackage(pack); // Use addPackage to trigger semaphore
 	}
-	
 	
 	public void addTrucks(Truck[] tlist) {
 		for (Truck trk: tlist)
 			listTrucks.add(trk);
 	}
 
-	
 	public int getBranchId() {
 		return branchId;
 	}
-	
 	
 	public String getName() {
 		return branchName;
 	}
 
-	
 	@Override
 	public String toString() {
 		return "Branch " + branchId + ", branch name:" + branchName + ", packages: " + listPackages.size()
 				+ ", trucks: " + listTrucks.size();
 	}
 
-	
 	@Override
 	public synchronized void  collectPackage(Package p) {
 		for (Truck v : listTrucks) {
@@ -135,17 +174,9 @@ public class Branch implements Node, Runnable {
 
 	@Override
 	public void work() {	
-		/*for (Package p: listPackages) {
-			if (p.getStatus()==Status.CREATION) {
-				collectPackage(p);
-			}
-			if (p.getStatus()==Status.DELIVERY) {
-				deliverPackage(p);
-			}
-		}*/	
+		// This method is kept for compatibility but main work moved to Van
 	}
 
-	
 	private boolean arePackagesInBranch() {
 		for(Package p: listPackages) {
 			if (p.getStatus() == Status.BRANCH_STORAGE)
@@ -167,6 +198,7 @@ public class Branch implements Node, Runnable {
    		hubPoint = new Point(1120,y2);
 	}
 
+	// FIXED: Remove active package assignment - let Vans handle it via semaphore
 	@Override
 	public void run() {
 		while(true) {
@@ -175,18 +207,18 @@ public class Branch implements Node, Runnable {
 					try {
 						wait();
 					} catch (InterruptedException e) {
-						// TODO Auto-generated catch block
 						e.printStackTrace();
 					}
 		    }
-			try {
+		    
+		    // Just sleep - Vans will handle package processing via semaphore
+		    try {
 		    	Thread.sleep(300);
 		    } catch (InterruptedException e) {
 		    	e.printStackTrace();
 		    }
 		}
 	}
-	
 	
 	public synchronized void setSuspend() {
 	   	threadSuspend = true;
@@ -196,6 +228,4 @@ public class Branch implements Node, Runnable {
 	   	threadSuspend = false;
 	   	notify();
 	}
-
-	public Semaphore getWorkSemaphore(){return workAvailable;}
 }

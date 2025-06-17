@@ -48,7 +48,8 @@ public class MainOffice implements Runnable{
 			System.out.println("MainOffice already initialized");
 			return;
 		}
-		
+		clearTrackingFile();
+
 		this.panel = panel;
 		this.maxPackages = maxPack;
 		addHub(trucksForBranch);
@@ -56,7 +57,6 @@ public class MainOffice implements Runnable{
 		
 		// Create 10 customers using ThreadPool
 		createCustomers();
-		
 		this.initialized = true;
 		System.out.println("\n\n========================== START ==========================");
 	}
@@ -261,4 +261,17 @@ public class MainOffice implements Runnable{
 			}
 		}
 	}
+
+	private void clearTrackingFile() {
+	trackingFileLock.writeLock().lock();
+	try (FileWriter writer = new FileWriter(TRACKING_FILE, false)) { // false = overwrite
+		// Write header if desired
+		writer.flush();
+		System.out.println("Tracking file cleared for new simulation");
+	} catch (IOException e) {
+		System.err.println("Error clearing tracking file: " + e.getMessage());
+	} finally {
+		trackingFileLock.writeLock().unlock();
+	}
+}
 }

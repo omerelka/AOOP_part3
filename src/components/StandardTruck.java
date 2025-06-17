@@ -5,7 +5,7 @@ import java.awt.Font;
 import java.awt.Graphics;
 import java.util.Random;
 
-public class StandardTruck extends Truck{
+public class StandardTruck extends Truck {
 	private int maxWeight;
 	private Branch destination=null;
 	private Branch source = null;
@@ -22,6 +22,24 @@ public class StandardTruck extends Truck{
 	public StandardTruck(String licensePlate,String truckModel,int maxWeight) {
 		super(licensePlate,truckModel);
 		this.maxWeight=maxWeight;
+	}
+	
+	// Clone implementation for StandardTruck
+	@Override
+	public StandardTruck clone() throws CloneNotSupportedException {
+		StandardTruck clonedTruck = new StandardTruck();
+		this.copyPropertiesTo(clonedTruck);
+		
+		// Copy specific StandardTruck properties
+		clonedTruck.maxWeight = this.maxWeight;
+		
+		// Don't copy: destination, source (start fresh)
+		clonedTruck.destination = null;
+		clonedTruck.source = null;
+		
+		System.out.println("Cloned StandardTruck: " + this.getTruckID() + " -> " + clonedTruck.getTruckID() + 
+		                   " (maxWeight: " + this.maxWeight + ")");
+		return clonedTruck;
 	}
 	
 	
@@ -90,13 +108,13 @@ public class StandardTruck extends Truck{
 	}
 	
 
+	// FIXED: Implement wait-based system for StandardTrucks
 	@Override
 	public void run() {
 		while(true) {
 			try {
 				Thread.sleep(300);
 			} catch (InterruptedException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
 		    synchronized(this) {
@@ -104,11 +122,12 @@ public class StandardTruck extends Truck{
 					try {
 						wait();
 					} catch (InterruptedException e) {
-						// TODO Auto-generated catch block
 						e.printStackTrace();
 					}
 		    }
+		    
 			if (!isAvailable()) {
+				// Handle current work
 				setTimeLeft(getTimeLeft()-1);
 				if (getTimeLeft()==0) {
 					System.out.println("StandardTruck "+ getTruckID()+ " arrived to " + destination.getName());
@@ -116,7 +135,6 @@ public class StandardTruck extends Truck{
 					if (destination==MainOffice.getHub()) {
 						setAvailable(true);
 					}
-						
 					else {
 						load(destination, MainOffice.getHub(), Status.HUB_TRANSPORT);
 						setTimeLeft(((new Random()).nextInt(6)+1)*10);
@@ -127,21 +145,29 @@ public class StandardTruck extends Truck{
 					}			
 				}
 			}
-			else
-				synchronized(this) {
-					try {
-						wait();
-					} catch (InterruptedException e) {
-						// TODO Auto-generated catch block
-						e.printStackTrace();
+			else {
+				// FIXED: Wait for work using semaphore (like Vans)
+				try {
+					// Wait for semaphore signal that there's work available
+					MainOffice.getHub().getStandardTruckWorkSemaphore().acquire();
+					
+					// Try to get work from Hub
+					synchronized(MainOffice.getHub()) {
+						if (MainOffice.getHub().findBranchWithWork() != null) {
+							MainOffice.getHub().sendTruck(this);
+						}
 					}
+					
+				} catch (InterruptedException e) {
+					e.printStackTrace();
 				}
+			}
 		}
 	}
 	
 	
 	public void work() {
-
+		// Empty
 	}
 
 
@@ -158,16 +184,26 @@ public class StandardTruck extends Truck{
 				start = this.destination.getHubPoint();
 			}
 			else {
-				start = this.source.getBranchPoint();
-				end = this.source.getHubPoint();
+				// Fix: Check if source is not null before accessing it
+				if (this.source != null) {
+					start = this.source.getBranchPoint();
+					end = this.source.getHubPoint();
+				} else {
+					return; // Skip painting if source is null
+				}
 			}
 		}
 		else {			
 			Package p = this.getPackages().get(getPackages().size()-1);
 			col = new Color(0,102,0);
 			if (p.getStatus()==Status.HUB_TRANSPORT) {
-				start = this.source.getBranchPoint();
-				end = this.source.getHubPoint();
+				// Fix: Check if source is not null before accessing it
+				if (this.source != null) {
+					start = this.source.getBranchPoint();
+					end = this.source.getHubPoint();
+				} else {
+					return; // Skip painting if source is null
+				}
 			}
 			else if (p.getStatus()==Status.BRANCH_TRANSPORT){
 				end = this.destination.getBranchPoint();
@@ -183,7 +219,6 @@ public class StandardTruck extends Truck{
 			int y1 = end.getY();
 				
 			double ratio = (double) this.getTimeLeft()/this.initTime;
-			//System.out.println(x2+" "+x1+" "+ratio);
 			double length = Math.sqrt((x2-x1)*(x2-x1)+(y2-y1)*(y2-y1));
 			int dX = (int) (ratio*(x2-x1));
 			int dY = (int) (ratio*(y2-y1));
@@ -201,8 +236,4 @@ public class StandardTruck extends Truck{
 		}
 		
 	}
-
-
-
-	
 }
