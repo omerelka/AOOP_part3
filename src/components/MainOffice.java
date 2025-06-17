@@ -2,34 +2,108 @@ package components;
 
 import java.util.ArrayList;
 import java.util.Random;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.concurrent.locks.Lock;
+import java.io.FileWriter;
+import java.io.IOException;
 
 import javax.swing.JPanel;
 
-
 public class MainOffice implements Runnable{
-	private static int clock=0;
-	private static Hub hub;
-	private ArrayList<Package> packages=new ArrayList<Package>();
+	private static volatile MainOffice instance = null;
+	
+	// ThreadPool for customers
+	ExecutorService customerExecutor = Executors.newFixedThreadPool(2);
+	
+	// File tracking with ReentrantReadWriteLock
+	private final ReentrantReadWriteLock trackingFileLock = new ReentrantReadWriteLock();
+	private static final String TRACKING_FILE = "tracking.txt";
+	
+	private int clock = 0;
+	private Hub hub;
+	private ArrayList<Package> packages = new ArrayList<Package>();
 	private JPanel panel;
 	private int maxPackages;
 	private boolean threadSuspend = false;
+	private boolean initialized = false;
 	
-	public MainOffice(int branches, int trucksForBranch, JPanel panel, int maxPack) {
+	private MainOffice() {
+	}
+	
+	public static MainOffice getInstance() {
+		if (instance == null) {
+			synchronized (MainOffice.class) {
+				if (instance == null) {
+					instance = new MainOffice();
+				}
+			}
+		}
+		return instance;
+	}
+	
+	public synchronized void initialize(int branches, int trucksForBranch, JPanel panel, int maxPack) {
+		if (initialized) {
+			System.out.println("MainOffice already initialized");
+			return;
+		}
+		
 		this.panel = panel;
 		this.maxPackages = maxPack;
 		addHub(trucksForBranch);
 		addBranches(branches, trucksForBranch);
+		
+		// Create 10 customers using ThreadPool
+		createCustomers();
+		
+		this.initialized = true;
 		System.out.println("\n\n========================== START ==========================");
 	}
 	
+	// Method for writing to tracking file (MainOffice only)
+	public void writeTrackingToFile(Package pkg, Tracking tracking) {
+		trackingFileLock.writeLock().lock();
+		try (FileWriter writer = new FileWriter(TRACKING_FILE, true)) {
+			String nodeName = (tracking.node == null) ? "Customer" : tracking.node.getName();
+			String line = String.format("%d,%d,%d,%s,%s%n", 
+				pkg.getPackageID(), 
+				pkg.getCustomerId(), 
+				tracking.time, 
+				nodeName, 
+				tracking.status);
+			writer.write(line);
+			writer.flush();
+		} catch (IOException e) {
+			System.err.println("Error writing to tracking file: " + e.getMessage());
+		} finally {
+			trackingFileLock.writeLock().unlock();
+		}
+	}
+	
+	// Provide readLock for customers
+	public Lock getTrackingReadLock() {
+		return trackingFileLock.readLock();
+	}
+	
+	public String getTrackingFileName() {
+		return TRACKING_FILE;
+	}
+	
+	// Create 10 customers using ThreadPool of size 2
+	private void createCustomers() {
+		for (int i = 0; i < 10; i++) {
+			Customer customer = new Customer();
+			customerExecutor.submit(customer);
+		}
+	}
 	
 	public static Hub getHub() {
-		return hub;
+		return getInstance().hub;
 	}
 
-
 	public static int getClock() {
-		return clock;
+		return getInstance().clock;
 	}
 
 	@Override
@@ -54,15 +128,12 @@ public class MainOffice implements Runnable{
 					try {
 						wait();
 					} catch (InterruptedException e) {
-						// TODO Auto-generated catch block
 						e.printStackTrace();
 					}
 		    }
 			tick();
 		}
-		
 	}
-	
 	
 	public void printReport() {
 		for (Package p: packages) {
@@ -71,7 +142,6 @@ public class MainOffice implements Runnable{
 				System.out.println(t);
 		}
 	}
-	
 	
 	public String clockString() {
 		String s="";
@@ -83,12 +153,10 @@ public class MainOffice implements Runnable{
 		return s;
 	}
 	
-	
 	public void tick() {
 		try {
 			Thread.sleep(300);
 		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		System.out.println(clockString());
@@ -96,14 +164,8 @@ public class MainOffice implements Runnable{
 			addPackage();
 			maxPackages--;
 		}
-		/*branchWork(hub);
-		for (Branch b:hub.getBranches()) {
-			branchWork(b);
-		}*/
 		panel.repaint();
 	}
-	
-	
 	
 	public void branchWork(Branch b) {
 		for (Truck t : b.listTrucks) {
@@ -112,9 +174,8 @@ public class MainOffice implements Runnable{
 		b.work();
 	}
 	
-	
 	public void addHub(int trucksForBranch) {
-		hub=new Hub();
+		hub = new Hub();
 		for (int i=0; i<trucksForBranch; i++) {
 			Truck t = new StandardTruck();
 			hub.addTruck(t);
@@ -122,7 +183,6 @@ public class MainOffice implements Runnable{
 		Truck t=new NonStandardTruck();
 		hub.addTruck(t);
 	}
-	
 	
 	public void addBranches(int branches, int trucks) {
 		for (int i=0; i<branches; i++) {
@@ -133,7 +193,6 @@ public class MainOffice implements Runnable{
 			hub.add_branch(branch);		
 		}
 	}
-	
 	
 	public ArrayList<Package> getPackages(){
 		return this.packages;
@@ -149,30 +208,27 @@ public class MainOffice implements Runnable{
 
 		switch (r.nextInt(3)){
 		case 0:
-			p = new SmallPackage(priority,  sender, dest, r.nextBoolean() );
+			p = new SmallPackage(priority, sender, dest, r.nextBoolean(), 0);
 			br = hub.getBranches().get(sender.zip);
 			br.addPackage(p);
 			p.setBranch(br); 
 			break;
 		case 1:
-			p = new StandardPackage(priority,  sender, dest, r.nextFloat()+(r.nextInt(9)+1));
+			p = new StandardPackage(priority, sender, dest, (double)(r.nextFloat()+(r.nextInt(9)+1)), 0);
 			br = hub.getBranches().get(sender.zip); 
 			br.addPackage(p);
 			p.setBranch(br); 
 			break;
 		case 2:
-			p=new NonStandardPackage(priority,  sender, dest,  r.nextInt(1000), r.nextInt(500), r.nextInt(400));
+			p = new NonStandardPackage(priority, sender, dest, r.nextInt(1000), r.nextInt(500), r.nextInt(400), 0);
 			hub.addPackage(p);
 			break;
 		default:
-			p=null;
 			return;
 		}
 		
 		this.packages.add(p);
-		
 	}
-	
 	
 	public synchronized void setSuspend() {
 	   	threadSuspend = true;
@@ -188,8 +244,6 @@ public class MainOffice implements Runnable{
 		hub.setSuspend();
 	}
 
-	
-	
 	public synchronized void setResume() {
 	   	threadSuspend = false;
 	   	notify();
@@ -200,11 +254,8 @@ public class MainOffice implements Runnable{
 		for (Branch b: hub.getBranches()) {
 			b.setResume();
 			for (Truck t : b.listTrucks) {
-				t.setResume();;
+				t.setResume();
 			}
 		}
 	}
-
-
-
 }

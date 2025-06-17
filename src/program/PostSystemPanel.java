@@ -1,21 +1,13 @@
 package program;
 
-import java.awt.*;
-import java.util.List;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-
-import javax.imageio.ImageIO;
-import javax.swing.*;
-
 import components.*;
 import components.Package;
-
-import java.awt.image.BufferedImage;
-import java.io.File;
-import java.io.IOException;
+import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.util.*;
-import java.util.concurrent.CyclicBarrier;
+import java.util.List;
+import javax.swing.*;
 
 public class PostSystemPanel extends JPanel implements ActionListener {
    private static final long serialVersionUID = 1L;
@@ -57,7 +49,8 @@ public class PostSystemPanel extends JPanel implements ActionListener {
    
    public void createNewPostSystem(int branches, int trucks, int packages) {
 	   if (started) return;
-	   game = new MainOffice(branches, trucks, this, packages);
+	   game = MainOffice.getInstance();
+	   game.initialize(branches,trucks,this,packages);
 	   packagesNumber = packages;
 	   trucksNumber = trucks;
 	   branchesNumber = branches;

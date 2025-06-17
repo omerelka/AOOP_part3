@@ -3,11 +3,13 @@ package components;
 import java.awt.Color;
 import java.awt.Graphics;
 import java.util.ArrayList;
+import java.util.Observable;
 
 
-public abstract class Package {
+public abstract class Package extends Observable{
 	private static int countID=1000;
 	final private int packageID;
+	private int customerId;
 	private Priority priority;
 	private Status status;
 	private Address senderAddress;
@@ -21,10 +23,11 @@ public abstract class Package {
 
 	
 	
-	public Package(Priority priority, Address senderAddress,Address destinationAdress) {
+	public Package(Priority priority, Address senderAddress,Address destinationAdress,int customerid) {
 		packageID = countID++;
 		this.priority=priority;
 		this.status=Status.CREATION;
+		this.customerId = customerid;
 		this.senderAddress=senderAddress;
 		this.destinationAddress=destinationAdress;
 		tracking.add(new Tracking( MainOffice.getClock(), null, status));
@@ -55,6 +58,9 @@ public abstract class Package {
 	
 	public void setStatus(Status status) {
 		this.status = status;
+		if(status == Status.DELIVERED)
+		setChanged();
+		notifyObservers(this);
 	}
 
 	
@@ -85,12 +91,14 @@ public abstract class Package {
 
 	
 	public void addTracking(Node node, Status status) {
-		tracking.add(new Tracking(MainOffice.getClock(), node, status));
+		Tracking t = new Tracking(MainOffice.getClock(),node,status);
+		addTracking(t);
 	}
 	
 	
 	public void addTracking(Tracking t) {
 		tracking.add(t);
+		MainOffice.getInstance().writeTrackingToFile(this,t);
 	}
 	
 	
@@ -161,6 +169,10 @@ public abstract class Package {
    			
    		}
 	}
+
+    public int getCustomerId() {
+        return customerId;
+    }
 
 	
 	
