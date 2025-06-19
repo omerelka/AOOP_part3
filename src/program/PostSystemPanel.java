@@ -250,99 +250,111 @@ public class PostSystemPanel extends JPanel implements ActionListener {
        repaint();
    }
 
-   // NEW: Clone Branch functionality
    public void cloneBranch() {
-	   if (game == null || !started) {
-		   JOptionPane.showMessageDialog(this, "Please create and start the system first!");
-		   return;
-	   }
-	   
-	   // Create dialog for branch selection
-	   ArrayList<Branch> branches = game.getHub().getBranches();
-	   String[] branchOptions = new String[branches.size()];
-	   
-	   for(int i = 0; i < branches.size(); i++) {
-		   branchOptions[i] = "Branch " + i;
-	   }
-	   
-	   JComboBox<String> branchComboBox = new JComboBox<>(branchOptions);
-	   String[] options = {"OK", "Cancel"};
-	   String title = "Select Branch to Clone";
-	   
-	   int selection = JOptionPane.showOptionDialog(
-		   this, 
-		   branchComboBox, 
-		   title,
-		   JOptionPane.DEFAULT_OPTION, 
-		   JOptionPane.PLAIN_MESSAGE, 
-		   null, 
-		   options,
-		   options[0]
-	   );
-	   
-	   if (selection == 1 || selection == JOptionPane.CLOSED_OPTION) {
-		   return; // User cancelled
-	   }
-	   
-	   try {
-		   // Get the selected branch
-		   int selectedBranchIndex = branchComboBox.getSelectedIndex();
-		   Branch originalBranch = branches.get(selectedBranchIndex);
-		   
-		   // Clone the branch
-		   Branch clonedBranch = originalBranch.clone();
-		   
-		   // Add the cloned branch to the hub
-		   game.getHub().add_branch(clonedBranch);
-		   
-		   // Start the cloned branch thread
-		   Thread branchThread = new Thread(clonedBranch);
-		   branchThread.start();
-		   
-		   // Start threads for all trucks in the cloned branch
-		   for (Truck truck : clonedBranch.getTrucks()) {
-			   Thread truckThread = new Thread(truck);
-			   truckThread.start();
-		   }
-		   
-		   // Update the branches number for the panel
-		   branchesNumber = game.getHub().getBranches().size();
-		   
-		   JOptionPane.showMessageDialog(
-			   this, 
-			   "Branch cloned successfully!\nOriginal: " + originalBranch.getName() + 
-			   "\nCloned: " + clonedBranch.getName(),
-			   "Clone Successful",
-			   JOptionPane.INFORMATION_MESSAGE
-		   );
-		   
-		   // Repaint to show the new branch
-		   repaint();
-		   
-	   } catch (CloneNotSupportedException e) {
-		   JOptionPane.showMessageDialog(
-			   this, 
-			   "Error cloning branch: " + e.getMessage(),
-			   "Clone Error",
-			   JOptionPane.ERROR_MESSAGE
-		   );
-		   e.printStackTrace();
-	   }
-   }
+    if (game == null || !started) {
+        JOptionPane.showMessageDialog(this, "Please create and start the system first!");
+        return;
+    }
+    
+    ArrayList<Branch> branches = game.getHub().getBranches();
+    String[] branchOptions = new String[branches.size()];
+    
+    for(int i = 0; i < branches.size(); i++) {
+        branchOptions[i] = "Branch " + i;
+    }
+    
+    JComboBox<String> branchComboBox = new JComboBox<>(branchOptions);
+    String[] options = {"OK", "Cancel"};
+    String title = "Select Branch to Clone";
+    
+    int selection = JOptionPane.showOptionDialog(
+        this, 
+        branchComboBox, 
+        title,
+        JOptionPane.DEFAULT_OPTION, 
+        JOptionPane.PLAIN_MESSAGE, 
+        null, 
+        options,
+        options[0]
+    );
+    
+    if (selection == 1 || selection == JOptionPane.CLOSED_OPTION) {
+        return;
+    }
+    
+    try {
+        int selectedBranchIndex = branchComboBox.getSelectedIndex();
+        Branch originalBranch = branches.get(selectedBranchIndex);
+        
+        BranchMemento memento = new BranchMemento(branches.size(), originalBranch);
+        game.getBranchCaretaker().saveMemento(memento);
+        
+        Branch clonedBranch = originalBranch.clone();
+        
+        // Add the cloned branch to the hub
+        game.getHub().add_branch(clonedBranch);
+        
+        Thread branchThread = new Thread(clonedBranch);
+        branchThread.start();
+        
+        for (Truck truck : clonedBranch.getTrucks()) {
+            Thread truckThread = new Thread(truck);
+            truckThread.start();
+        }
+        
+        branchesNumber = game.getHub().getBranches().size();
+        
+        JOptionPane.showMessageDialog(
+            this, 
+            "Branch cloned successfully!\nOriginal: " + originalBranch.getName() + 
+            "\nCloned: " + clonedBranch.getName(),
+            "Clone Successful",
+            JOptionPane.INFORMATION_MESSAGE
+        );
+        
+        repaint();
+        
+    } catch (CloneNotSupportedException e) {
+        JOptionPane.showMessageDialog(
+            this, 
+            "Error cloning branch: " + e.getMessage(),
+            "Clone Error",
+            JOptionPane.ERROR_MESSAGE
+        );
+        e.printStackTrace();
+    }
+}
+   
 
    // NEW: Restore functionality (placeholder for Memento pattern)
    public void restore() {
-	   JOptionPane.showMessageDialog(this, "Restore functionality - To be implemented with Memento pattern");
+	  if (game == null) {
+        JOptionPane.showMessageDialog(this, "Please create the system first!");
+        return;
+    }
+    
+    if (!game.getBranchCaretaker().hasSavedState()) {
+        JOptionPane.showMessageDialog(this, "No clone operation to restore!");
+        return;
+    }
+    
+    boolean success = game.restoreLastClone();
+    
+    if (success) {
+        branchesNumber = game.getHub().getBranches().size();
+        JOptionPane.showMessageDialog(this, "Clone operation restored successfully!");
+        repaint();
+    } else {
+        JOptionPane.showMessageDialog(this, "Failed to restore clone operation!");
+    }
    }
 
-   // NEW: Show Report functionality
    public void showReport() {
 	   if (game == null) {
 		   JOptionPane.showMessageDialog(this, "Please create the system first!");
 		   return;
 	   }
 	   
-	   // Simple implementation - show tracking file content
 	   try {
 		   StringBuilder content = new StringBuilder();
 		   content.append("Tracking File Content:\n");

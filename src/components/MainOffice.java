@@ -20,6 +20,8 @@ public class MainOffice implements Runnable{
 	// File tracking with ReentrantReadWriteLock
 	private final ReentrantReadWriteLock trackingFileLock = new ReentrantReadWriteLock();
 	private static final String TRACKING_FILE = "tracking.txt";
+
+	private BranchCaretaker branchCaretaker = new BranchCaretaker();
 	
 	private int clock = 0;
 	private Hub hub;
@@ -272,6 +274,57 @@ public class MainOffice implements Runnable{
 		System.err.println("Error clearing tracking file: " + e.getMessage());
 	} finally {
 		trackingFileLock.writeLock().unlock();
+	}	
 	}
+
+	public BranchCaretaker getBranchCaretaker(){
+		return branchCaretaker;
+	}
+
+	public synchronized boolean restoreLastClone() {
+    if (!branchCaretaker.hasSavedState()) {
+        System.out.println("No clone operation to restore");
+        return false;
+    }
+    
+    BranchMemento memento = branchCaretaker.getMemento();
+    int targetBranchCount = memento.getOriginalBranchCount();
+    int currentBranchCount = hub.getBranches().size();
+    
+    if (currentBranchCount <= targetBranchCount) {
+        System.out.println("No branches to remove");
+        return false;
+    }
+    
+    // Remove the last cloned branch and transfer its packages
+    Branch branchToRemove = hub.getBranches().get(currentBranchCount - 1);
+    Branch originalBranch = memento.getOriginalBranch();
+    
+    // Transfer packages from cloned branch to original branch
+    synchronized(branchToRemove) {
+        synchronized(originalBranch) {
+            for (Package pkg : branchToRemove.getPackages()) {
+                originalBranch.addPackage(pkg);
+                System.out.println("Transferred package " + pkg.getPackageID() + 
+                                 " from " + branchToRemove.getName() + 
+                                 " to " + originalBranch.getName());
+            }
+        }
+    }
+    
+    // Remove the branch
+    hub.getBranches().remove(branchToRemove);
+    
+    // Set suspend flag for the removed branch (threads will stop naturally)
+    branchToRemove.setSuspend();
+    for (Truck truck : branchToRemove.getTrucks()) {
+        truck.setSuspend();
+    }
+    
+    System.out.println("Restored system: removed " + branchToRemove.getName() + 
+                      ", now have " + hub.getBranches().size() + " branches");
+    
+    branchCaretaker.clearMemento();
+    return true;
 }
 }
