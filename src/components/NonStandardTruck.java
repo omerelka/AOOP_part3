@@ -140,14 +140,16 @@ public class NonStandardTruck extends Truck{
 				+ height + "]";
 	}
 
+	
 
-	@Override
-	public void paintComponent(Graphics g) {
-		if (isAvailable()) return;
+@Override
+public void paintComponent(Graphics g) {
+	if (!isAvailable() && getPackages() != null && getPackages().size() > 0) {
 		Package p = this.getPackages().get(getPackages().size()-1);	
 		Point start=null;
 		Point end=null;
 		Color col = null;
+		
 		if (p.getStatus()==Status.COLLECTION) {
 			start = new Point(1140, 216);
 			end = p.getSendPoint();
@@ -159,8 +161,7 @@ public class NonStandardTruck extends Truck{
 			col = Color.RED;
 		}
 
-		
-		if (start!=null) {
+		if (start != null && end != null) {
 			int x2 = start.getX();
 			int y2 = start.getY();
 			int x1 = end.getX();
@@ -180,6 +181,10 @@ public class NonStandardTruck extends Truck{
 			g.fillOval(dX+x1-12, dY+y1, 10, 10);
 		}
 	}
+}
+
+
+	
 
 
 	@Override

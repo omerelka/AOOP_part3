@@ -14,7 +14,7 @@ public class PostSystemPanel extends JPanel implements ActionListener {
    private Main frame;
    private JPanel p1;
    private JButton[] b_num;
-   private String[] names = {"Create system","Start","Stop","Resume","All packages info","Branch info"};
+   private String[] names = {"Create system","Start","Stop","Resume","All packages info","Branch info","Clone Branch","Restore","Report"};
    private JScrollPane scrollPane;
    private boolean isTableVisible = false;
    private boolean isTable2Visible = false;
@@ -31,7 +31,7 @@ public class PostSystemPanel extends JPanel implements ActionListener {
 	    isTableVisible = false;
 	    setBackground(new Color(255,255,255));
 	    p1=new JPanel();
-		p1.setLayout(new GridLayout(1,7,0,0));
+		p1.setLayout(new GridLayout(1,9,0,0)); // Changed from 7 to 9
 		p1.setBackground(new Color(0,150,255));
 		b_num=new JButton[names.length];
 		
@@ -57,54 +57,50 @@ public class PostSystemPanel extends JPanel implements ActionListener {
 	   
 	   repaint();
    }
-   
 
    public void paintComponent(Graphics g) {
-	   	super.paintComponent(g);	
-	   	   	
-	   	if (game==null) return;
-	   	
-	   	Hub hub = game.getHub();
-	   	ArrayList<Branch> branches = hub.getBranches();
-	   	
-	   	int offset = 403/(branchesNumber-1);
-	   	int y=100;
-	   	int y2=246;
-	   	int offset2 = 140/(branchesNumber-1);
-	   	
-	   	g.setColor(new Color(0,102,0));
-	   	g.fillRect(1120, 216, 40, 200);
-	   	
-	   	
-	   	for (Branch br: branches) {
-	   		br.paintComponent(g,y,y2);
-	   		y+=offset;
-	   		y2+=offset2;
-	   	}
-	   	
-	   	
-	   	int x = 150;
-	   	int offset3 = (1154-300)/(packagesNumber-1);
-	   	
-	   	for (Package p: game.getPackages()) {
-	   		p.paintComponent(g,x,offset);
-	   		x+=offset3;
-	   	}
-	   	
-	   	
-		for (Branch br: branches) {
-			for(Truck tr: br.getTrucks()) {
-				tr.paintComponent(g);
-			}
-	   	}
-		
-		for(Truck tr: hub.getTrucks()) {
-			tr.paintComponent(g);
-		}
-   	
-   }
-   
-   
+    super.paintComponent(g);	
+       	
+    if (game==null) return;
+    
+    Hub hub = game.getHub();
+    ArrayList<Branch> branches = hub.getBranches();
+    
+    int branchOffset = 403/(branchesNumber-1);
+    int y=100;
+    int y2=246;
+    int offset2 = 140/(branchesNumber-1);
+    
+    g.setColor(new Color(0,102,0));
+    g.fillRect(1120, 216, 40, 200);
+    
+    for (Branch br: branches) {
+        br.paintComponent(g,y,y2);
+        y+=branchOffset;
+        y2+=offset2;
+    }
+    
+    int packageOffset = Math.max(80, 403/(branchesNumber-1));
+    
+    int x = 150;
+    int offset3 = (1154-300)/(packagesNumber-1);
+    
+    for (Package p: game.getPackages()) {
+        p.paintComponent(g,x,packageOffset);
+        x+=offset3;
+    }
+    
+    for (Branch br: branches) {
+        for(Truck tr: br.getTrucks()) {
+            tr.paintComponent(g);
+        }
+    }
+    
+    for(Truck tr: hub.getTrucks()) {
+        tr.paintComponent(g);
+    }
+}
+
    
    public void setColorIndex(int ind) {
 	   this.colorInd = ind;
@@ -254,6 +250,134 @@ public class PostSystemPanel extends JPanel implements ActionListener {
        repaint();
    }
 
+   // NEW: Clone Branch functionality
+   public void cloneBranch() {
+	   if (game == null || !started) {
+		   JOptionPane.showMessageDialog(this, "Please create and start the system first!");
+		   return;
+	   }
+	   
+	   // Create dialog for branch selection
+	   ArrayList<Branch> branches = game.getHub().getBranches();
+	   String[] branchOptions = new String[branches.size()];
+	   
+	   for(int i = 0; i < branches.size(); i++) {
+		   branchOptions[i] = "Branch " + i;
+	   }
+	   
+	   JComboBox<String> branchComboBox = new JComboBox<>(branchOptions);
+	   String[] options = {"OK", "Cancel"};
+	   String title = "Select Branch to Clone";
+	   
+	   int selection = JOptionPane.showOptionDialog(
+		   this, 
+		   branchComboBox, 
+		   title,
+		   JOptionPane.DEFAULT_OPTION, 
+		   JOptionPane.PLAIN_MESSAGE, 
+		   null, 
+		   options,
+		   options[0]
+	   );
+	   
+	   if (selection == 1 || selection == JOptionPane.CLOSED_OPTION) {
+		   return; // User cancelled
+	   }
+	   
+	   try {
+		   // Get the selected branch
+		   int selectedBranchIndex = branchComboBox.getSelectedIndex();
+		   Branch originalBranch = branches.get(selectedBranchIndex);
+		   
+		   // Clone the branch
+		   Branch clonedBranch = originalBranch.clone();
+		   
+		   // Add the cloned branch to the hub
+		   game.getHub().add_branch(clonedBranch);
+		   
+		   // Start the cloned branch thread
+		   Thread branchThread = new Thread(clonedBranch);
+		   branchThread.start();
+		   
+		   // Start threads for all trucks in the cloned branch
+		   for (Truck truck : clonedBranch.getTrucks()) {
+			   Thread truckThread = new Thread(truck);
+			   truckThread.start();
+		   }
+		   
+		   // Update the branches number for the panel
+		   branchesNumber = game.getHub().getBranches().size();
+		   
+		   JOptionPane.showMessageDialog(
+			   this, 
+			   "Branch cloned successfully!\nOriginal: " + originalBranch.getName() + 
+			   "\nCloned: " + clonedBranch.getName(),
+			   "Clone Successful",
+			   JOptionPane.INFORMATION_MESSAGE
+		   );
+		   
+		   // Repaint to show the new branch
+		   repaint();
+		   
+	   } catch (CloneNotSupportedException e) {
+		   JOptionPane.showMessageDialog(
+			   this, 
+			   "Error cloning branch: " + e.getMessage(),
+			   "Clone Error",
+			   JOptionPane.ERROR_MESSAGE
+		   );
+		   e.printStackTrace();
+	   }
+   }
+
+   // NEW: Restore functionality (placeholder for Memento pattern)
+   public void restore() {
+	   JOptionPane.showMessageDialog(this, "Restore functionality - To be implemented with Memento pattern");
+   }
+
+   // NEW: Show Report functionality
+   public void showReport() {
+	   if (game == null) {
+		   JOptionPane.showMessageDialog(this, "Please create the system first!");
+		   return;
+	   }
+	   
+	   // Simple implementation - show tracking file content
+	   try {
+		   StringBuilder content = new StringBuilder();
+		   content.append("Tracking File Content:\n");
+		   content.append("Format: PackageID,CustomerID,Time,Node,Status\n\n");
+		   
+		   java.io.BufferedReader reader = new java.io.BufferedReader(
+			   new java.io.FileReader("tracking.txt")
+		   );
+		   String line;
+		   while ((line = reader.readLine()) != null) {
+			   content.append(line).append("\n");
+		   }
+		   reader.close();
+		   
+		   JTextArea textArea = new JTextArea(content.toString());
+		   textArea.setEditable(false);
+		   JScrollPane scrollPane = new JScrollPane(textArea);
+		   scrollPane.setPreferredSize(new java.awt.Dimension(500, 400));
+		   
+		   JOptionPane.showMessageDialog(
+			   this, 
+			   scrollPane, 
+			   "Tracking Report", 
+			   JOptionPane.INFORMATION_MESSAGE
+		   );
+		   
+	   } catch (java.io.IOException e) {
+		   JOptionPane.showMessageDialog(
+			   this, 
+			   "Error reading tracking file: " + e.getMessage(),
+			   "File Error",
+			   JOptionPane.ERROR_MESSAGE
+		   );
+	   }
+   }
    
    public void destroy(){  	        
       System.exit(0);
@@ -273,6 +397,12 @@ public class PostSystemPanel extends JPanel implements ActionListener {
 		info();
 	else if(e.getSource() == b_num[5])  
 		branchInfo();
+	else if(e.getSource() == b_num[6])  
+		cloneBranch();
+	else if(e.getSource() == b_num[7])  
+		restore();
+	else if(e.getSource() == b_num[8])  
+		showReport();
    }
 
 }
